@@ -1,5 +1,8 @@
 # Pi-oi: a Tool for Finding Local IP Address of Your Raspberry Pi
 
+## System requirements
+1. Java 7+
+
 ## How to use
 Download latest version at: https://raw.githubusercontent.com/thoqbk/pi-oi/master/pi-oi.jar
 
@@ -66,9 +69,6 @@ Test in my home:
 Test at my company:
 
 ![test at my company](https://github.com/thoqbk/pi-oi/blob/master/resources/test-at-my-company.png)
-
-## System requirements
-1. Java 7+
 
 ## Author and contact
 [ThoQ Luong](https://github.com/thoqbk/)
