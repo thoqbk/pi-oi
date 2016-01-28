@@ -21,37 +21,34 @@ So I decided to develop my own algorithm to resolve all these stuffs. The algori
 Following is the pseudo code of the algorithm for single thread scanning:
 ```java
 myLocalAddresses <— get local IP addresses //example: 192.168.1.23
-openConnectionTimeout <— get open connection time out
-readTimeout <— get read timeout
 for each myLocalAddress in myLocalAddresses do
-   networkPrefix <— get network prefix of myLocalAddress // example: 192.168.1
-    hostNumber <— get host number of myLocalAddress // example: 23
-    pendingHostNumbers <— [1,255] - {hostNumber} // pending for scanning
-    initPivot <— hostNumber //start scanning from this pivot
-    pivot <— null
-    scanningRange <— null
+    networkPrefix <— get network prefix of myLocalAddress // example: 192.168.1 
+    initPivot <— get host number of myLocalAddress // example: 23
+    pendingHostNumbers <— [1,255] - {initPivot} // pending for scanning    
+    pivot, scanningRange <— null
+    
     while (pendingHostNumbers is not empty) OR (scanningRange is not null) OR (pivot is not null) do
         if scanningRange is null and pivot is null then
-            scanningRange <— pick and remove a range in pendingHostNumbers around initPivot
+            scanningRange <— pick range from pendingHostNumbers around initPivot
         else if scanningRange is not empty then
             scan all ip addresses in scanningRange and print out result if found a machine open SSH port
             if last ip address in scanningRange is active
-                scanningRange <— pick and remove a range in pendingHostNumbers around scanningRange.last
+                scanningRange <— pick a range from pendingHostNumbers around scanningRange.last
             else if first ip address in scanningRange is active
-                scanningRange <— pick and remove a range in pendingHostNumbers around scanningRange.first
+                scanningRange <— pick a range in pendingHostNumbers around scanningRange.first
             else
                 scanningRange <— null
-                pivot <— pick a new pivot and remove it from pendingHostNumbers
+                pivot <— pick a new pivot from pendingHostNumbers
             end if
         else if pivot is not null then
             scan pivot
             if pivot is active then
-                scanningRange <— pick and remove a range in pendingHostNumbers around pivot
+                scanningRange <— pick a range from pendingHostNumbers around pivot
             else
-                pivot <— pick a new pivot and remove it from pendingHostNumbers
+                pivot <— pick a new pivot from pendingHostNumbers
             end if
         else
-            pivot <— pick a new pivot and remove it from pendingHostNumbers
+            pivot <— pick a new pivot from pendingHostNumbers
             scanningRange <— null
         end if
     end of while
@@ -60,18 +57,18 @@ end of for
 In the implementation I split the range [1,255] in 5 continuous parts and start a 5-threads executor-service for scanning faster.
 
 ## Implementation and test result
-I used Java to implement this algorithm and tested this tool in some local networks and the Pi-oi usually found my Raspberry Pi in less than 30 seconds. Following are shot screens of my tests:
+I used Java to implement this algorithm and tested in some local networks. Result is Pi-oi usually found my Raspberry Pi in less than 30 seconds. Following are shot screens of my tests:
 
 Test in my home:
 
 ![test in my home](https://github.com/thoqbk/pi-oi/blob/master/resources/test-in-my-home.png)
+
 Test at my company:
 
 ![test at my company](https://github.com/thoqbk/pi-oi/blob/master/resources/test-at-my-company.png)
 
 ## System requirements
-1. Java 8+
-2. Maven 3+
+1. Java 7+
 
 ## Author and contact
 [ThoQ Luong](https://github.com/thoqbk/)
