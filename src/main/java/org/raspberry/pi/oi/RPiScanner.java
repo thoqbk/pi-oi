@@ -27,7 +27,7 @@ public class RPiScanner {
     //--------------------------------------------------------------------------
     //  Members
     private static final Logger logger = LoggerFactory.getLogger(RPiScanner.class);
-    
+
     private static final int RANGE_LENGTH = 5;
 
     private final String networkPrefix;
@@ -37,16 +37,19 @@ public class RPiScanner {
 
     private final TablePrinter tablePrinter;
 
-    private final long startTime;
-    
+    private long startTime = 0;
+
     private int sshPort = 22;
-    private long readTimeout = 800;//ms
+    private long readTimeout = 1000;//ms
+
+    private long openConnectionTimeout = 500;
+    
+    private int rpiCount = 0;
 
     public RPiScanner(String networkPrefix, int initPivot, int lowerPivot, int upperPivot, TablePrinter tablePrinter) {
         this.networkPrefix = networkPrefix;
         this.initPivot = initPivot;
         this.tablePrinter = tablePrinter;
-        this.startTime = System.currentTimeMillis();
         for (int hostNumber = lowerPivot; hostNumber <= upperPivot; hostNumber++) {
             pendingHostNumbers.add(hostNumber);
         }
@@ -54,6 +57,10 @@ public class RPiScanner {
         logger.debug("Create scanner with: lowerPivot: " + lowerPivot + ", upperPivot: " + upperPivot + " and initPivot: " + initPivot);
     }
 
+    public void setStartTime(long startTime) {
+        this.startTime = startTime;
+    }
+    
     public void setSshPort(int sshPort) {
         this.sshPort = sshPort;
     }
@@ -62,6 +69,16 @@ public class RPiScanner {
         this.readTimeout = readTimeout;
     }
     
+    public void setOpenConnectionTimeout(long timeout){
+        this.openConnectionTimeout = timeout;
+    }
+
+    public int getRpiCount() {
+        return rpiCount;
+    }
+    
+    
+
     public void scan() {
         int pivot = -1;
         List<Integer> range = null;
@@ -190,47 +207,63 @@ public class RPiScanner {
         final Socket socket = new Socket();
         final StringBuilder serverResponse = new StringBuilder();
 
-        Thread clientSocketThread = new Thread(new Runnable() {
+        Thread openConnectionThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     socket.connect(new InetSocketAddress(address, sshPort));
-                    socket.getOutputStream().write("hello".getBytes());
-
-                    try {
-                        boolean flag = true;
-                        while (flag) {
-                            int readByte = socket.getInputStream().read();
-                            if (readByte != -1) {
-                                char ch = (char) readByte;
-                                boolean b1 = 'a' <= ch && ch <= 'z';
-                                boolean b2 = 'A' <= ch && ch <= 'Z';
-                                boolean b3 = '0' <= ch && ch <= '9';
-                                boolean b4 = Arrays.asList(' ', '.', '-', ',', '_').contains(ch);
-                                if (b1 || b2 || b3 || b4) {
-                                    serverResponse.append(ch);
-                                }
-                            } else {
-                                flag = false;
-                            }
-                        }
-                    } catch (IOException ex) {
-                        //logger.debug(null, ex);
-                    }
+                    logger.debug("Connected to " + address);
                 } catch (IOException ex) {
                     //logger.debug(null, ex);
                 }
             }
         });
-        clientSocketThread.start();
+        openConnectionThread.setDaemon(true);
+        openConnectionThread.start();
         try {
-            Thread.sleep(readTimeout);
-            socket.close();
+            Thread.sleep(openConnectionTimeout);
+            openConnectionThread.interrupt();
+            if (socket.isConnected()) {
+                Thread readThread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {                        
+                        try {
+                            socket.getOutputStream().write("hello".getBytes());
+                            boolean flag = true;
+                            while (flag) {
+                                int readByte = socket.getInputStream().read();
+                                if (readByte != -1) {
+                                    char ch = (char) readByte;
+                                    boolean b1 = 'a' <= ch && ch <= 'z';
+                                    boolean b2 = 'A' <= ch && ch <= 'Z';
+                                    boolean b3 = '0' <= ch && ch <= '9';
+                                    boolean b4 = Arrays.asList(' ', '.', '-', ',', '_').contains(ch);
+                                    if (b1 || b2 || b3 || b4) {
+                                        serverResponse.append(ch);
+                                    }
+                                } else {
+                                    flag = false;
+                                }
+                            }
+                        } catch (IOException ex) {
+                            //logger.debug(null, ex);
+                        }
+                    }
+
+                });
+                readThread.setDaemon(true);
+                readThread.start();
+                Thread.sleep(readTimeout);
+                readThread.interrupt();
+                socket.close();
+            }            
         } catch (InterruptedException | IOException ex) {
             logger.debug(null, ex);
         }
         String retVal = serverResponse.toString();
-        logger.debug("Response from host: " + address + ": " + retVal);
+        if (retVal != null && retVal.length() > 0) {
+            logger.debug("Response from host: " + address + ": " + retVal);
+        }
         log(address, retVal);
         //return
         return retVal;
@@ -256,13 +289,14 @@ public class RPiScanner {
         if (!isAliveHostResponse) {
             return;
         }
-        boolean shouldBeARPi = shouldBeARPi(hostResponse);
-
-        float time = System.currentTimeMillis() - startTime;
+        boolean shouldBeARPi = shouldBeARPi(hostResponse);        
+        
+        float time = (float)(System.currentTimeMillis() - startTime);
 
         int timeInSeconds = Math.round(time / 1000);
 
         tablePrinter.printRecord(host, hostResponse, shouldBeARPi, timeInSeconds);
+        rpiCount++;
     }
 
 }

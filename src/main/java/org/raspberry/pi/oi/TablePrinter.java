@@ -59,4 +59,13 @@ public class TablePrinter {
         logger.info(message);
     }
 
+    public void printRecord(String content) {
+        Formatter formatter = new Formatter();
+        int length = addressColumn + isAliveHostResponseColumn + shouldBeARPiColumn + timeColumn + 1;
+        String format = "| %-" + length + "." + (length - 2) + "s |";
+        String message = formatter.format(format, content)
+                .toString();
+        logger.info(message);
+    }
+
 }

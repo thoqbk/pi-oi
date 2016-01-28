@@ -11,11 +11,14 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -32,22 +35,29 @@ public class MAIN {
 
     public static void main(String[] args) throws InterruptedException, IOException {
         PropertyConfigurator.configure(MAIN.class.getResource("/org/raspberry/pi/oi/resource/log4j.properties"));
-        
+
         int sshPort = getArgument(args, "sshPort", 22);
-        long readTimeout = getArgument(args, "readTimeout", 800);
-        
+        long readTimeout = getArgument(args, "readTimeout", 1000);
+        long openConnectionTimeout = getArgument(args, "openConnectionTimeout", 800);
+
+        logger.info("");
         logger.info("PI-OI is finding your Pi ...");
+
+        final AtomicInteger rpiCount = new AtomicInteger(0);
 
         //MAIN main = new MAIN();
         //main.scan(main.getLocalAddresses().get(0));
-        int workersNumber = 5;
+        int workersNumber = 10;
         int minHostNumber = 1;
         int maxHostNumber = 255;
-
+        
+        long startTime = System.currentTimeMillis();
+        
         TablePrinter printer = new TablePrinter();
-        printer.printHeader();
 
         List<String> localAddresses = MAIN.getLocalAddresses();
+
+        printer.printHeader();
 
         for (String localAddress : localAddresses) {
 
@@ -59,17 +69,20 @@ public class MAIN {
 
             int step = (maxHostNumber - minHostNumber + 1) / workersNumber;
             for (int idx = 0; idx < workersNumber; idx++) {
-                int startHostNumber = idx * step;
-                int endHostNumber = workersNumber - 1 == idx ? maxHostNumber : startHostNumber + step - 1;
-                int initPivot = (startHostNumber <= initHostNumber && initHostNumber <= endHostNumber) ? initHostNumber : -1;
-                final RPiScanner scanner = new RPiScanner(networkPrefix, initPivot, startHostNumber, endHostNumber, printer);
+                int lowerPivot = idx * step;
+                int upperPivot = workersNumber - 1 == idx ? maxHostNumber : lowerPivot + step - 1;
+                int initPivot = (lowerPivot <= initHostNumber && initHostNumber <= upperPivot) ? initHostNumber : -1;
+                final RPiScanner scanner = new RPiScanner(networkPrefix, initPivot, lowerPivot, upperPivot, printer);
                 scanner.setSshPort(sshPort);
                 scanner.setReadTimeout(readTimeout);
-
+                scanner.setOpenConnectionTimeout(openConnectionTimeout);
+                scanner.setStartTime(startTime);
+                
                 executorService.submit(new Runnable() {
                     @Override
                     public void run() {
                         scanner.scan();
+                        rpiCount.addAndGet(scanner.getRpiCount());
                         logger.debug("DONE");
                     }
                 });
@@ -77,10 +90,13 @@ public class MAIN {
             executorService.shutdown();
             executorService.awaitTermination(10L, TimeUnit.MINUTES);
         }
+        if (rpiCount.get() == 0) {
+            printer.printRecord("(Pi not found)");
+        }
         printer.printFooter();
         System.in.read();
     }
-    
+
     private static int getArgument(String[] args, String argName, int defaultValue) {
         int retVal = defaultValue;
         List<String> args2 = Arrays.asList(args);
@@ -117,6 +133,23 @@ public class MAIN {
         } catch (SocketException ex) {
             Logger.getLogger(MAIN.class.getName()).log(Level.SEVERE, null, ex);
         }
+        //Sort
+        Collections.sort(retVal, new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                String[] o1s = o1.split("\\.");
+                String[] o2s = o2.split("\\.");
+                int i1 = Integer.parseInt(o1s[o1s.length - 2]);
+                int i2 = Integer.parseInt(o2s[o2s.length - 2]);
+                int retVal = 0;
+                if (i1 > i2) {
+                    retVal = 1;
+                } else if (i1 < i2) {
+                    retVal = -1;
+                }
+                return retVal;
+            }
+        });
         return retVal;
     }
 
