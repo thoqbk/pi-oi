@@ -281,7 +281,7 @@ public class RPiScanner {
         if (!isAliveHostResponse(response)) {
             return false;
         }
-        return response.toLowerCase().contains("debian");
+        return response.toLowerCase().contains("debian") || response.toLowerCase().contains("raspbian");
     }
 
     private void log(String host, String hostResponse) {
