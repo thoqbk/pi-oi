@@ -94,7 +94,6 @@ public class MAIN {
             printer.printRecord("(Pi not found)");
         }
         printer.printFooter();
-        System.in.read();
     }
 
     private static int getArgument(String[] args, String argName, int defaultValue) {
